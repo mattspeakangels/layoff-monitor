@@ -17,38 +17,49 @@ try:
 except ImportError:
     HAS_STREAMLIT = False
 
-# Init Firebase
+
 def _get_credentials():
-    """Load Firebase credentials from Streamlit secrets or env var."""
-    # Try Streamlit secrets first (Streamlit Cloud)
+    """Load Firebase credentials.
+
+    Priority order:
+    1. Streamlit secrets as TOML table [firebase] (most reliable on Streamlit Cloud)
+    2. Streamlit secrets as JSON string FIREBASE_CREDENTIALS (fallback)
+    3. Local file .secrets/ai-fires-sa.json (local development)
+    """
     if HAS_STREAMLIT:
         try:
-            cred_dict = st.secrets.to_dict().get("FIREBASE_CREDENTIALS")
-            if isinstance(cred_dict, dict):
+            # Option 1: TOML table [firebase] - returns a dict-like object
+            if "firebase" in st.secrets:
+                cred_dict = dict(st.secrets["firebase"])
+                # private_key in TOML often has escaped \n, normalize them
+                if "private_key" in cred_dict:
+                    cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
                 return credentials.Certificate(cred_dict)
-            elif isinstance(cred_dict, str):
-                return credentials.Certificate(json.loads(cred_dict))
-        except Exception:
+        except (KeyError, AttributeError, FileNotFoundError):
             pass
-    
-    # Try environment variable
-    if "FIREBASE_CREDENTIALS" in os.environ:
-        cred_str = os.environ["FIREBASE_CREDENTIALS"]
-        if isinstance(cred_str, dict):
-            return credentials.Certificate(cred_str)
-        else:
-            return credentials.Certificate(json.loads(cred_str))
-    
-    # Fall back to local file for development
+
+        try:
+            # Option 2: JSON string FIREBASE_CREDENTIALS (legacy)
+            firebase_cred = st.secrets.get("FIREBASE_CREDENTIALS")
+            if firebase_cred:
+                if isinstance(firebase_cred, str):
+                    cred_dict = json.loads(firebase_cred)
+                else:
+                    cred_dict = dict(firebase_cred)
+                return credentials.Certificate(cred_dict)
+        except (KeyError, json.JSONDecodeError, AttributeError, FileNotFoundError):
+            pass
+
+    # Option 3: local file
     cred_path = os.path.join(os.path.dirname(__file__), ".secrets", "ai-fires-sa.json")
     if os.path.exists(cred_path):
         return credentials.Certificate(cred_path)
-    
+
     raise FileNotFoundError(
-        "Firebase credentials not found. "
-        "Set FIREBASE_CREDENTIALS in Streamlit secrets or env var, "
-        "or place ai-fires-sa.json in .secrets/"
+        "Firebase credentials not found. On Streamlit Cloud, add a [firebase] "
+        "table to Secrets. Locally, place ai-fires-sa.json in .secrets/ directory."
     )
+
 
 if not firebase_admin._apps:
     cred = _get_credentials()
