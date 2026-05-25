@@ -150,8 +150,57 @@ def get_custom_sources(include_disabled: bool = False) -> list[dict]:
     return sources
 
 
-def add_custom_source(name: str, url: str) -> str:
-    """Aggiunge una fonte RSS custom. Solleva ValueError se nome già usato.
+def validate_feed_url(url: str, timeout: int = 8) -> tuple[bool, str]:
+    """Verifica che un URL risponda 200 e restituisca XML/RSS valido.
+
+    Returns: (is_valid, message). is_valid=True con message='OK' se buono.
+    """
+    import requests
+    import xml.etree.ElementTree as ET
+
+    headers = {
+        # User-Agent realistico: alcuni siti (Reuters, NYT) bloccano UA generici
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=timeout)
+    except requests.Timeout:
+        return False, f"timeout dopo {timeout}s (server troppo lento)"
+    except requests.RequestException as e:
+        return False, f"connessione fallita: {e}"
+
+    if resp.status_code == 401:
+        return False, "401 Unauthorized — il feed richiede autenticazione (es. Reuters Connect)"
+    if resp.status_code == 403:
+        return False, "403 Forbidden — il sito blocca scraping (es. NYT, Bloomberg)"
+    if resp.status_code == 404:
+        return False, "404 Not Found — l'URL non esiste"
+    if resp.status_code != 200:
+        return False, f"HTTP {resp.status_code} (atteso 200)"
+
+    # Prova a parsare come XML
+    try:
+        root = ET.fromstring(resp.content)
+    except ET.ParseError as e:
+        return False, f"contenuto non è XML valido ({e})"
+
+    # Cerca <item> (RSS) o <entry> (Atom) per essere sicuri sia un feed
+    has_items = (root.findall(".//item") or
+                 root.findall(".//{http://www.w3.org/2005/Atom}entry"))
+    if not has_items:
+        return False, "XML valido ma non contiene <item> o <entry> — non sembra un feed"
+
+    return True, "OK"
+
+
+def add_custom_source(name: str, url: str, validate: bool = True) -> str:
+    """Aggiunge una fonte RSS custom. Solleva ValueError se nome già usato
+    o se il feed non risponde correttamente (a meno di validate=False).
 
     Returns: ID del documento creato.
     """
@@ -167,6 +216,12 @@ def add_custom_source(name: str, url: str) -> str:
                 if s.get("name", "").lower() == name.lower()]
     if existing:
         raise ValueError(f"esiste già una fonte chiamata '{name}'")
+
+    # Validazione del feed: il sito risponde con XML?
+    if validate:
+        ok, msg = validate_feed_url(url)
+        if not ok:
+            raise ValueError(f"feed non valido: {msg}")
 
     doc_ref = db.collection("custom_sources").add({
         "name": name,

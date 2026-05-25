@@ -13,6 +13,7 @@ from db import (
     add_custom_source,
     delete_custom_source,
     toggle_custom_source,
+    validate_feed_url,
 )
 from etl import run_etl_with_ui
 from scraper import RSS_SOURCES
@@ -163,20 +164,42 @@ with st.sidebar:
 
                 st.markdown("---")
                 st.markdown("**Aggiungi fonte RSS**")
+                st.caption(
+                    "Suggerimenti che funzionano: Google News custom queries "
+                    "(`https://news.google.com/rss/search?q=YOUR+QUERY`), "
+                    "The Verge, Ars Technica, Crunchbase News. "
+                    "Reuters/Bloomberg/NYT bloccano gli scraper pubblici."
+                )
                 new_name = st.text_input("Nome fonte", key="new_src_name",
-                                         placeholder="es. Bloomberg Tech")
+                                         placeholder="es. The Verge")
                 new_url = st.text_input("URL feed RSS", key="new_src_url",
-                                        placeholder="https://...")
-                if st.button("Aggiungi fonte", key="add_src_btn", width="stretch"):
-                    try:
-                        add_custom_source(new_name, new_url)
-                        st.cache_data.clear()
-                        st.success(f"Fonte '{new_name}' aggiunta")
-                        st.rerun()
-                    except ValueError as e:
-                        st.error(f"Errore: {e}")
-                    except Exception as e:
-                        st.error(f"Impossibile aggiungere: {e}")
+                                        placeholder="https://www.theverge.com/rss/index.xml")
+
+                c_test, c_add = st.columns(2)
+                with c_test:
+                    if st.button("🔍 Verifica", key="test_src_btn", width="stretch"):
+                        if not new_url.strip():
+                            st.warning("Inserisci un URL prima di verificare.")
+                        else:
+                            with st.spinner("Test feed in corso…"):
+                                ok, msg = validate_feed_url(new_url.strip())
+                            if ok:
+                                st.success("Feed valido ✓")
+                            else:
+                                st.error(f"Feed non valido: {msg}")
+                with c_add:
+                    if st.button("➕ Aggiungi", key="add_src_btn", type="primary",
+                                 width="stretch"):
+                        try:
+                            with st.spinner("Validazione e salvataggio…"):
+                                add_custom_source(new_name, new_url)
+                            st.cache_data.clear()
+                            st.success(f"Fonte '{new_name}' aggiunta")
+                            st.rerun()
+                        except ValueError as e:
+                            st.error(f"Errore: {e}")
+                        except Exception as e:
+                            st.error(f"Impossibile aggiungere: {e}")
 
                 st.markdown("---")
                 st.markdown("**Fonti custom registrate**")
