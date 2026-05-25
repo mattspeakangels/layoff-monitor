@@ -65,18 +65,18 @@ def _sparkline_svg(data: list, color: str, width: int = 84, height: int = 28) ->
 
     grad_id = f"sg_{abs(hash(str(data[:4]))) % 99999}"
 
-    return f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" style="overflow:visible">
-  <defs>
-    <linearGradient id="{grad_id}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="{color}" stop-opacity="0.45"/>
-      <stop offset="100%" stop-color="{color}" stop-opacity="0"/>
-    </linearGradient>
-  </defs>
-  <path d="{area_d}" fill="url(#{grad_id})"/>
-  <path d="{line_d}" fill="none" stroke="{color}" stroke-width="1.5"
-        stroke-linejoin="round" stroke-linecap="round"/>
-  <circle cx="{pts[-1][0]}" cy="{pts[-1][1]}" r="2.5" fill="{color}"/>
-</svg>"""
+    return (
+        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" style="overflow:visible">'
+        f'<defs><linearGradient id="{grad_id}" x1="0" y1="0" x2="0" y2="1">'
+        f'<stop offset="0%" stop-color="{color}" stop-opacity="0.45"/>'
+        f'<stop offset="100%" stop-color="{color}" stop-opacity="0"/>'
+        f'</linearGradient></defs>'
+        f'<path d="{area_d}" fill="url(#{grad_id})"/>'
+        f'<path d="{line_d}" fill="none" stroke="{color}" stroke-width="1.5" '
+        f'stroke-linejoin="round" stroke-linecap="round"/>'
+        f'<circle cx="{pts[-1][0]}" cy="{pts[-1][1]}" r="2.5" fill="{color}"/>'
+        f'</svg>'
+    )
 
 
 def kpi_card_html(
@@ -89,43 +89,56 @@ def kpi_card_html(
     theme:   str  = "dark",
     tooltip: str  = "",
 ) -> str:
-    """Restituisce l'HTML di un singolo KPI card (usa con st.markdown unsafe)."""
+    """Restituisce l'HTML di un singolo KPI card (usa con st.markdown unsafe).
+
+    Lo style del wrapper è collassato su una sola riga: placeholder vuoti
+    (es. left_border con variant != 'signal') lasciavano linee bianche dentro
+    style="…" e il parser markdown di Streamlit chiudeva il blocco HTML lì,
+    mostrando il resto come testo.
+    """
     v = VARIANTS.get(variant, VARIANTS["signal"])
     c = COLORS.get(theme, COLORS["dark"])
     svg = _sparkline_svg(spark, accent)
 
-    left_border = f"border-left: 2px solid {accent};" if variant == "signal" else ""
-    card_bg = (
-        f"background: color-mix(in srgb, {accent} 5%, {c['card']});"
-        if variant == "pulse" else
-        f"background: {c['card']};"
-    )
+    if variant == "pulse":
+        card_bg = f"background: color-mix(in srgb, {accent} 5%, {c['card']})"
+    else:
+        card_bg = f"background: {c['card']}"
 
-    return f"""
-<div title="{tooltip}" style="
-    {card_bg}
-    {left_border}
-    border: 1px solid {c['border']};
-    border-radius: {v['radius']};
-    padding: 14px 16px;
-    display: grid;
-    grid-template-areas: 'lbl sp' 'val val' 'sub sub';
-    grid-template-columns: 1fr auto;
-    gap: 4px 8px;
-    transition: background 0.15s;
-">
-  <div style="grid-area:lbl; font-size:11px; font-weight:600; text-transform:uppercase;
-              letter-spacing:0.6px; color:{c['text2']}; align-self:center;">
-    {label}
-  </div>
-  <div style="grid-area:sp; align-self:center;">{svg}</div>
-  <div style="grid-area:val; font-family:{v['kpi_font']}; font-size:{v['kpi_size']};
-              font-weight:700; color:{c['text1']}; line-height:1.1;
-              letter-spacing:-0.5px; margin-top:4px;">
-    {value}
-  </div>
-  <div style="grid-area:sub; font-size:11px; color:{c['text3']};">{sub}</div>
-</div>"""
+    style_parts = [card_bg]
+    if variant == "signal":
+        style_parts.append(f"border-left: 2px solid {accent}")
+    style_parts += [
+        f"border: 1px solid {c['border']}",
+        f"border-radius: {v['radius']}",
+        "padding: 14px 16px",
+        "display: grid",
+        "grid-template-areas: 'lbl sp' 'val val' 'sub sub'",
+        "grid-template-columns: 1fr auto",
+        "gap: 4px 8px",
+        "transition: background 0.15s",
+    ]
+    wrapper_style = "; ".join(style_parts)
+
+    label_style = (
+        f"grid-area:lbl; font-size:11px; font-weight:600; text-transform:uppercase; "
+        f"letter-spacing:0.6px; color:{c['text2']}; align-self:center;"
+    )
+    val_style = (
+        f"grid-area:val; font-family:{v['kpi_font']}; font-size:{v['kpi_size']}; "
+        f"font-weight:700; color:{c['text1']}; line-height:1.1; "
+        f"letter-spacing:-0.5px; margin-top:4px;"
+    )
+    sub_style = f"grid-area:sub; font-size:11px; color:{c['text3']};"
+
+    return (
+        f'<div title="{tooltip}" style="{wrapper_style}">'
+        f'<div style="{label_style}">{label}</div>'
+        f'<div style="grid-area:sp; align-self:center;">{svg}</div>'
+        f'<div style="{val_style}">{value}</div>'
+        f'<div style="{sub_style}">{sub}</div>'
+        f'</div>'
+    )
 
 
 def kpi_row(

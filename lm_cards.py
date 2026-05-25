@@ -104,13 +104,27 @@ def news_card_html(
     stats_html = " · ".join(stats_bits) if stats_bits else \
         f"<span style='color:{c['text3']}'>numero dipendenti non estratto dal titolo</span>"
 
-    # Variante stylistic touches
-    left_border = f"border-left: 2px solid {accent};" if variant == "signal" else ""
-    card_bg = (
-        f"background: color-mix(in srgb, {accent} 5%, {c['card']});"
-        if variant == "pulse" else
-        f"background: {c['card']};"
-    )
+    # Variante stylistic touches — costruisci lo style come singola riga
+    # per evitare che placeholder vuoti spezzino il blocco HTML in markdown.
+    if variant == "pulse":
+        card_bg = f"background: color-mix(in srgb, {accent} 5%, {c['card']})"
+    else:
+        card_bg = f"background: {c['card']}"
+
+    wrapper_style_parts = [card_bg]
+    if variant == "signal":
+        wrapper_style_parts.append(f"border-left: 2px solid {accent}")
+    wrapper_style_parts += [
+        f"border: 1px solid {c['border']}",
+        f"border-radius: {v['radius']}",
+        "padding: 16px 18px",
+        "margin-bottom: 12px",
+        "display: flex",
+        "flex-direction: column",
+        "gap: 10px",
+        "transition: background 0.15s, border-color 0.15s",
+    ]
+    wrapper_style = "; ".join(wrapper_style_parts)
 
     # ai_cause badge
     ai_cause_colors = {
@@ -146,53 +160,41 @@ def news_card_html(
             f'💬 HN discussion</a>'
         )
 
-    return f"""
-<div style="
-    {card_bg}
-    {left_border}
-    border: 1px solid {c['border']};
-    border-radius: {v['radius']};
-    padding: 16px 18px;
-    margin-bottom: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    transition: background 0.15s, border-color 0.15s;
-">
-  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-    <div style="
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 14px; font-weight: 700;
-      color: {c['text1']}; letter-spacing: -0.3px;
-    ">{company}</div>
-    <div style="display:flex; gap:10px; align-items:center; font-size:11px; color:{c['text2']};
-                font-family: 'DM Mono', monospace;">
-      <span title="Layoff Certainty (1-5)">Cert {cert_str}</span>
-      <span title="AI Causality (1-5)">AI→ {ai_str}</span>
-      {ai_cause_badge}
-    </div>
-  </div>
+    header_style = "display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;"
+    company_style = (
+        f"font-family: 'Space Grotesk', sans-serif; font-size: 14px; "
+        f"font-weight: 700; color: {c['text1']}; letter-spacing: -0.3px;"
+    )
+    scores_style = (
+        f"display:flex; gap:10px; align-items:center; font-size:11px; "
+        f"color:{c['text2']}; font-family: 'DM Mono', monospace;"
+    )
+    title_style = f"font-size:14px; line-height:1.45; color:{c['text1']}; font-weight:500;"
+    stats_style = f"font-size:12px; color:{c['text2']};"
+    footer_style = (
+        f"padding-top:8px; border-top:1px solid {c['border']}; display:flex; "
+        f"align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;"
+    )
+    date_style = f"font-size:11px; color:{c['text3']}; font-family:'DM Mono', monospace;"
 
-  <div style="font-size:14px; line-height:1.45; color:{c['text1']}; font-weight:500;">
-    {title}
-  </div>
-
-  <div style="font-size:12px; color:{c['text2']};">
-    {stats_html}
-  </div>
-
-  <div style="
-    padding-top: 8px;
-    border-top: 1px solid {c['border']};
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 12px; flex-wrap: wrap;
-  ">
-    <div>{source_link}{hn_link}</div>
-    <div style="font-size:11px; color:{c['text3']}; font-family:'DM Mono', monospace;">
-      📅 {date_str} · {source}
-    </div>
-  </div>
-</div>"""
+    return (
+        f'<div style="{wrapper_style}">'
+        f'<div style="{header_style}">'
+        f'<div style="{company_style}">{company}</div>'
+        f'<div style="{scores_style}">'
+        f'<span title="Layoff Certainty (1-5)">Cert {cert_str}</span>'
+        f'<span title="AI Causality (1-5)">AI→ {ai_str}</span>'
+        f'{ai_cause_badge}'
+        f'</div>'
+        f'</div>'
+        f'<div style="{title_style}">{title}</div>'
+        f'<div style="{stats_style}">{stats_html}</div>'
+        f'<div style="{footer_style}">'
+        f'<div>{source_link}{hn_link}</div>'
+        f'<div style="{date_style}">📅 {date_str} · {source}</div>'
+        f'</div>'
+        f'</div>'
+    )
 
 
 def news_cards(
