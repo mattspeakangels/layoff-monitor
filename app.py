@@ -14,6 +14,7 @@ from scraper import RSS_SOURCES
 from lm_style import inject_css, section_title, custom_header
 from lm_charts import area_chart, hbar_chart
 from lm_kpi import kpi_row
+from lm_cards import news_cards
 
 ACCENTS = {"signal": "#3a7bd5", "pulse": "#06c9c2", "radar": "#e84855"}
 SOURCE_OPTIONS = ["Hacker News"] + list(RSS_SOURCES.keys())
@@ -267,23 +268,38 @@ with col_companies:
         width="stretch", config={"displayModeBar": False},
     )
 
-# ---------- TABLE ----------
+# ---------- SEARCH (applicato sia a card che a tabella) ----------
 st.markdown("---")
 
-search = st.text_input("🔍 Cerca azienda, titolo, fonte…", placeholder="es. Google, Salesforce…")
+search = st.text_input(
+    "🔍 Cerca azienda, titolo, fonte…",
+    placeholder="es. Google, Salesforce, OpenAI…",
+)
 
 if df.empty:
     st.info("Nessun dato con i filtri correnti. Prova ad ampliare la finestra temporale o premi ↺ Forza ETL.")
-else:
-    df_show = df.copy()
-    if search:
-        mask = (
-            df_show["company"].astype(str).str.contains(search, case=False, na=False)
-            | df_show["title"].astype(str).str.contains(search, case=False, na=False)
-            | df_show["source"].astype(str).str.contains(search, case=False, na=False)
-        )
-        df_show = df_show[mask]
+    st.stop()
 
+df_show = df.copy()
+if search:
+    mask = (
+        df_show["company"].astype(str).str.contains(search, case=False, na=False)
+        | df_show["title"].astype(str).str.contains(search, case=False, na=False)
+        | df_show["source"].astype(str).str.contains(search, case=False, na=False)
+        | df_show["url"].astype(str).str.contains(search, case=False, na=False)
+    )
+    df_show = df_show[mask]
+
+# ---------- NEWS CARDS (con fonte URL in evidenza) ----------
+st.subheader("📰 Notizie con fonte")
+st.caption("Ogni card include il link diretto all'articolo originale e, se disponibile, alla discussione su Hacker News.")
+
+news_cards(df_show, accent=ACCENT, variant=variant, theme=THEME, per_page=10, columns=2)
+
+# ---------- TABLE (vista completa) ----------
+st.markdown("---")
+
+with st.expander("📋 Tabella completa", expanded=False):
     cert_emoji = {1: "🔴 1", 2: "🟠 2", 3: "🟡 3", 4: "🟢 4", 5: "✅ 5"}
     ai_emoji = {1: "⚪ 1", 2: "🔵 2", 3: "🟡 3", 4: "🟠 4", 5: "🔴 5"}
 
