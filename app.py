@@ -7,7 +7,13 @@ from datetime import datetime, timedelta, date
 import pandas as pd
 import streamlit as st
 
-from db import get_layoff_events
+from db import (
+    get_layoff_events,
+    get_custom_sources,
+    add_custom_source,
+    delete_custom_source,
+    toggle_custom_source,
+)
 from etl import run_etl_with_ui
 from scraper import RSS_SOURCES
 
@@ -17,7 +23,20 @@ from lm_kpi import kpi_row
 from lm_cards import news_cards
 
 ACCENTS = {"signal": "#3a7bd5", "pulse": "#06c9c2", "radar": "#e84855"}
-SOURCE_OPTIONS = ["Hacker News"] + list(RSS_SOURCES.keys())
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _list_custom_source_names() -> list[str]:
+    """Cache dei soli nomi delle fonti custom (per la multiselect Fonti)."""
+    try:
+        return [s["name"] for s in get_custom_sources(include_disabled=False)]
+    except Exception:
+        return []
+
+
+def _build_source_options() -> list[str]:
+    """Hacker News + RSS hardcoded + RSS custom."""
+    return ["Hacker News"] + list(RSS_SOURCES.keys()) + _list_custom_source_names()
 
 st.set_page_config(
     page_title="Layoff AI Monitor",
@@ -94,8 +113,9 @@ with st.sidebar:
     )
 
     section_title("Fonti")
+    source_options = _build_source_options()
     selected_sources = st.multiselect(
-        "Fonti", options=SOURCE_OPTIONS, default=SOURCE_OPTIONS,
+        "Fonti", options=source_options, default=source_options,
         label_visibility="collapsed",
     )
 
@@ -112,7 +132,79 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
-    st.caption("Firestore backend. ETL on demand, no auto-sync yet.")
+    st.caption("Firestore backend · ETL automatico ogni 6h via GitHub Actions.")
+
+    # ───── ADMIN: gestione fonti RSS ───────────────────────────────────
+    with st.expander("🔐 Admin · Gestione fonti", expanded=False):
+        expected_pwd = st.secrets.get("ADMIN_PASSWORD", "") if hasattr(st, "secrets") else ""
+
+        if not expected_pwd:
+            st.warning(
+                "Per usare la sezione Admin imposta `ADMIN_PASSWORD` nei Secrets "
+                "di Streamlit Cloud (o `.streamlit/secrets.toml` in locale)."
+            )
+        else:
+            if "admin_authed" not in st.session_state:
+                st.session_state.admin_authed = False
+
+            if not st.session_state.admin_authed:
+                pwd = st.text_input("Password admin", type="password", key="admin_pwd_input")
+                if st.button("Sblocca", key="admin_unlock", width="stretch"):
+                    if pwd == expected_pwd:
+                        st.session_state.admin_authed = True
+                        st.rerun()
+                    else:
+                        st.error("Password errata")
+            else:
+                st.success("Autenticato come admin")
+                if st.button("Esci", key="admin_logout", width="stretch"):
+                    st.session_state.admin_authed = False
+                    st.rerun()
+
+                st.markdown("---")
+                st.markdown("**Aggiungi fonte RSS**")
+                new_name = st.text_input("Nome fonte", key="new_src_name",
+                                         placeholder="es. Bloomberg Tech")
+                new_url = st.text_input("URL feed RSS", key="new_src_url",
+                                        placeholder="https://...")
+                if st.button("Aggiungi fonte", key="add_src_btn", width="stretch"):
+                    try:
+                        add_custom_source(new_name, new_url)
+                        st.cache_data.clear()
+                        st.success(f"Fonte '{new_name}' aggiunta")
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(f"Errore: {e}")
+                    except Exception as e:
+                        st.error(f"Impossibile aggiungere: {e}")
+
+                st.markdown("---")
+                st.markdown("**Fonti custom registrate**")
+                try:
+                    custom = get_custom_sources(include_disabled=True)
+                except Exception as e:
+                    custom = []
+                    st.error(f"Errore lettura fonti: {e}")
+
+                if not custom:
+                    st.caption("Nessuna fonte custom ancora aggiunta.")
+                for src in custom:
+                    c1, c2, c3 = st.columns([3, 1, 1])
+                    with c1:
+                        status = "🟢" if src.get("enabled", True) else "⚫"
+                        st.markdown(f"{status} **{src['name']}**  \n<small>{src['url']}</small>",
+                                    unsafe_allow_html=True)
+                    with c2:
+                        label = "Disab" if src.get("enabled", True) else "Abil"
+                        if st.button(label, key=f"tog_{src['id']}", width="stretch"):
+                            toggle_custom_source(src["id"], not src.get("enabled", True))
+                            st.cache_data.clear()
+                            st.rerun()
+                    with c3:
+                        if st.button("🗑", key=f"del_{src['id']}", width="stretch"):
+                            delete_custom_source(src["id"])
+                            st.cache_data.clear()
+                            st.rerun()
 
 
 # ---------- DATA LOAD ----------

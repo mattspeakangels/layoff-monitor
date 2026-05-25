@@ -308,9 +308,34 @@ def _fetch_rss(source_name: str, url: str, days_back: int) -> list[LayoffStory]:
 
 # --- Public API ---
 
+def _get_all_rss_sources() -> dict[str, str]:
+    """Unisce le RSS hardcoded con quelle custom registrate in Firestore.
+
+    Le custom NON sovrascrivono le hardcoded se hanno lo stesso nome
+    (l'add ne previene la creazione comunque). In caso di errore Firestore,
+    si torna sulle sole hardcoded.
+    """
+    merged = dict(RSS_SOURCES)
+    try:
+        from db import get_custom_sources
+        for s in get_custom_sources(include_disabled=False):
+            name = s.get("name")
+            url = s.get("url")
+            if name and url and name not in merged:
+                merged[name] = url
+    except Exception as e:
+        # Non bloccare l'ETL se Firestore è temporaneamente down.
+        try:
+            st.warning(f"Impossibile leggere fonti custom da Firestore: {e}")
+        except Exception:
+            print(f"[scraper] custom sources unavailable: {e}")
+    return merged
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_all_sources(days_back: int = 90) -> pd.DataFrame:
-    """Fetch from all sources (HN + 3 RSS) and merge into one deduplicated DataFrame.
+    """Fetch from all sources (HN + RSS hardcoded + RSS custom) and merge
+    into one deduplicated DataFrame.
 
     Returns DataFrame sorted by date descending.
     Empty DataFrame if all sources fail.
@@ -320,7 +345,8 @@ def fetch_all_sources(days_back: int = 90) -> pd.DataFrame:
     with st.spinner("Hacker News…"):
         all_stories += _fetch_hn(days_back=days_back, max_per_query=100)
 
-    for source_name, rss_url in RSS_SOURCES.items():
+    rss_sources = _get_all_rss_sources()
+    for source_name, rss_url in rss_sources.items():
         with st.spinner(f"{source_name}…"):
             all_stories += _fetch_rss(source_name, rss_url, days_back)
 
