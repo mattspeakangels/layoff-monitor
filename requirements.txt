@@ -3,3 +3,4 @@ pandas>=2.1
 requests>=2.31
 firebase-admin>=6.5
 google-cloud-firestore>=2.16
+plotly>=5.18
