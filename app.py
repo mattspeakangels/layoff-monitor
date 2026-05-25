@@ -163,9 +163,9 @@ weekly = (
 
 tab1, tab2 = st.tabs(["Storie/settimana", "Dipendenti/settimana"])
 with tab1:
-    st.bar_chart(weekly["stories"], use_container_width=True)
+    st.bar_chart(weekly["stories"], width='stretch')
 with tab2:
-    st.bar_chart(weekly["employees"], use_container_width=True)
+    st.bar_chart(weekly["employees"], width='stretch')
 
 # ---------- TOP COMPANIES ----------
 st.subheader("🏢 Top aziende per dipendenti coinvolti")
@@ -177,7 +177,7 @@ top_companies = (
     .head(15)
 )
 if not top_companies.empty:
-    st.bar_chart(top_companies.set_index("company"), use_container_width=True)
+    st.bar_chart(top_companies.set_index("company"), width='stretch')
 else:
     st.info("Nessun dato sui dipendenti estraibile dai titoli per questo filtro.")
 
@@ -210,7 +210,7 @@ df_display["causality"] = df_display.get("ai_causality", 0).apply(format_causali
 
 st.dataframe(
     df_display[["date", "source", "company", "certainty", "causality", "title", "employees", "percent_workforce", "url", "hn_discussion"]],
-    use_container_width=True,
+    width='stretch',
     hide_index=True,
     column_config={
         "url": st.column_config.LinkColumn("Articolo"),
