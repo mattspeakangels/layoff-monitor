@@ -12,10 +12,25 @@ from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1 import DocumentReference
 
 # Init Firebase
-_CREDENTIALS_PATH = os.path.join(os.path.dirname(__file__), ".secrets", "ai-fires-sa.json")
+def _get_credentials():
+    """Load Firebase credentials from env var (Streamlit Cloud) or local file (dev)."""
+    # Try to load from environment variable (Streamlit Cloud secrets)
+    if "FIREBASE_CREDENTIALS" in os.environ:
+        cred_dict = json.loads(os.environ["FIREBASE_CREDENTIALS"])
+        return credentials.Certificate(cred_dict)
+    
+    # Fall back to local file for development
+    cred_path = os.path.join(os.path.dirname(__file__), ".secrets", "ai-fires-sa.json")
+    if os.path.exists(cred_path):
+        return credentials.Certificate(cred_path)
+    
+    raise FileNotFoundError(
+        "Firebase credentials not found. "
+        "Set FIREBASE_CREDENTIALS env var or place ai-fires-sa.json in .secrets/"
+    )
 
 if not firebase_admin._apps:
-    cred = credentials.Certificate(_CREDENTIALS_PATH)
+    cred = _get_credentials()
     firebase_admin.initialize_app(cred, {"projectId": "ai-fires"})
 
 db = firestore.client()
