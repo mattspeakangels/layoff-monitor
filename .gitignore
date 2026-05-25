@@ -28,4 +28,3 @@ build/
 .env.*.local
 
 # Streamlit
-.streamlit/secrets.toml

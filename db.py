@@ -11,13 +11,33 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1 import DocumentReference
 
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+
 # Init Firebase
 def _get_credentials():
-    """Load Firebase credentials from env var (Streamlit Cloud) or local file (dev)."""
-    # Try to load from environment variable (Streamlit Cloud secrets)
+    """Load Firebase credentials from Streamlit secrets or env var."""
+    # Try Streamlit secrets first (Streamlit Cloud)
+    if HAS_STREAMLIT:
+        try:
+            cred_dict = st.secrets.to_dict().get("FIREBASE_CREDENTIALS")
+            if isinstance(cred_dict, dict):
+                return credentials.Certificate(cred_dict)
+            elif isinstance(cred_dict, str):
+                return credentials.Certificate(json.loads(cred_dict))
+        except Exception:
+            pass
+    
+    # Try environment variable
     if "FIREBASE_CREDENTIALS" in os.environ:
-        cred_dict = json.loads(os.environ["FIREBASE_CREDENTIALS"])
-        return credentials.Certificate(cred_dict)
+        cred_str = os.environ["FIREBASE_CREDENTIALS"]
+        if isinstance(cred_str, dict):
+            return credentials.Certificate(cred_str)
+        else:
+            return credentials.Certificate(json.loads(cred_str))
     
     # Fall back to local file for development
     cred_path = os.path.join(os.path.dirname(__file__), ".secrets", "ai-fires-sa.json")
@@ -26,7 +46,8 @@ def _get_credentials():
     
     raise FileNotFoundError(
         "Firebase credentials not found. "
-        "Set FIREBASE_CREDENTIALS env var or place ai-fires-sa.json in .secrets/"
+        "Set FIREBASE_CREDENTIALS in Streamlit secrets or env var, "
+        "or place ai-fires-sa.json in .secrets/"
     )
 
 if not firebase_admin._apps:
